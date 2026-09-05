@@ -4,17 +4,40 @@ Scaled-down trial of a home media center, using hardware already on hand, before
 buying dedicated NAS/mini-PC hardware (see the original full build plan the user
 has saved separately for the eventual scaled-up version with Immich + RAID).
 
-**Scope of this phase:** one Dell Latitude laptop running only Jellyfin,
-with a single USB drive (WD10000H1U-00, 1TB, AC-powered) directly attached.
-No Immich, no RAID — that's a later phase once this is proven out.
+**End goal (unchanged, just not affordable yet):** a proper headless server with
+real NAS-grade storage, per the original build plan. Everything in this document
+is a budget-constrained interim step using hardware already owned — not a
+replacement for that goal. Once budget allows, the plan is to migrate off this
+laptop-plus-USB-drive setup onto dedicated hardware, at which point the
+"connected to a TV with a keyboard" arrangement goes away and it goes back to
+being tucked-away headless.
+
+**Scope of this phase:** one laptop (Dell Latitude, spec TBD — Toshiba Portege
+R835-P56X considered as a backup candidate) running Jellyfin, with a single USB
+drive (WD10000H1U-00, 1TB, AC-powered) directly attached. No Immich, no RAID —
+that's a later phase once this is proven out.
+
+**Not headless, for now.** Budget constraints mean there's no separate device
+to act as a "TV box" client, so the server laptop itself sits connected directly
+to the TV over HDMI and is driven with a wireless keyboard/mouse — video plays
+locally without going through the network at all. The only remote access is SSH,
+for updates and pushing files onto the drive. This is a stopgap arrangement, not
+the target architecture.
 
 ## Stack
 
-- Ubuntu Server 24.04 LTS (headless)
+- Ubuntu Desktop 24.04 LTS — a **lightweight flavor recommended** (Xubuntu/XFCE)
+  given the laptop hardware here is older/budget-tier and a heavy desktop
+  environment eats into the CPU headroom Jellyfin needs
 - USB drive formatted ext4, mounted via a **systemd automount unit** (not fstab) —
   so a drive that gets unplugged and replugged recovers without manual `mount` commands
 - **Rootless Podman**, managed via **Quadlet** systemd units (no Docker, no compose file)
-- Jellyfin, single container, port 8096
+- Jellyfin server, single container, port 8096
+- **Jellyfin Media Player** (mpv-based desktop client) running locally, talking to
+  the server over `localhost` and outputting to the TV via HDMI — this avoids the
+  extra transcoding a browser-based player would force for codecs the browser
+  itself can't decode, which matters more on older/weaker CPUs
+- OpenSSH, for remote administration only (updates, `scp`/`rsync` file transfers)
 
 Unit files referenced below live in [`units/`](units/) in this folder — copy them to
 the laptop rather than retyping.
@@ -23,23 +46,34 @@ the laptop rather than retyping.
 
 ## 1. Install the OS
 
-1. Flash Ubuntu Server 24.04 LTS to a USB installer, install headless on the laptop.
-2. During install: create your user, enable OpenSSH so the box can be administered
-   remotely without a monitor/keyboard attached long-term.
+1. Flash **Xubuntu 24.04 LTS** (or another lightweight Ubuntu Desktop flavor) to a
+   USB installer, install with the laptop connected to the TV over HDMI so you can
+   see what you're doing, plus the wireless keyboard/mouse.
+2. During install: create your user. The desktop installer doesn't offer an
+   OpenSSH checkbox like the server installer does — install it after first boot:
+   ```bash
+   sudo apt update && sudo apt install -y openssh-server
+   ```
+3. Optional but convenient for an appliance-like box: enable auto-login to the
+   desktop session (Settings → Users, or edit the display manager's config) so it
+   comes up ready to watch something after a power cycle without needing the
+   keyboard for a login screen.
 
-## 2. Base OS setup (headless, lid closed)
+## 2. Base OS setup
 
 ```bash
 sudo apt update && sudo apt full-upgrade -y
 
-# Prevent suspend on lid close / idle — needed since this runs headless, lid shut
+# Safety net: don't suspend if the lid ever gets bumped/closed accidentally
 sudo sed -i 's/^#\?HandleLidSwitch=.*/HandleLidSwitch=ignore/' /etc/systemd/logind.conf
 sudo sed -i 's/^#\?HandleLidSwitchDocked=.*/HandleLidSwitchDocked=ignore/' /etc/systemd/logind.conf
 sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 sudo systemctl restart systemd-logind
 ```
 
-Prefer wired Ethernet over Wi-Fi for a server that needs to stay reachable.
+Prefer wired Ethernet over Wi-Fi if you can run a cable to where the TV is — SSH
+access and any file pushes are more reliable that way, though Wi-Fi is fine too
+since this box no longer needs to be tucked away out of reach.
 
 ## 3. Format the USB drive and set up automount
 
@@ -134,19 +168,49 @@ this comes back up automatically on reboot with no login required.
 ## 6. Open access and configure
 
 ```bash
-sudo ufw allow 8096/tcp    # only if ufw is active
-hostname -I                # get the laptop's LAN IP
+sudo ufw allow OpenSSH     # the only inbound access this box needs from the LAN
+sudo ufw allow 8096/tcp    # only if you also want other devices to stream from it
+sudo ufw enable            # only if ufw wasn't already active
+hostname -I                # get the laptop's LAN IP, for SSH'ing in later
 ```
 
-Browse to `http://<laptop-ip>:8096` from another device, run Jellyfin's setup
-wizard, and add `/media/movies` and `/media/tv` (the in-container paths) as
-libraries.
+Browse to `http://localhost:8096` **on the laptop itself** (once the desktop and
+a browser are up), run Jellyfin's setup wizard, and add `/media/movies` and
+`/media/tv` (the in-container paths) as libraries. Other devices on the LAN can
+still reach `http://<laptop-ip>:8096` if you ever want to stream to them too —
+that's not disabled, just not the primary use case here.
 
-## 7. Verify
+## 7. Local playback on the TV
 
-- Play a file from another device on the LAN (confirms direct-play end to end).
-- Reboot the laptop; confirm the drive remounts (first access after boot) and
-  Jellyfin comes back up on its own.
+Install Jellyfin Media Player (mpv-based desktop client) via Flatpak, the
+simplest cross-distro path:
+
+```bash
+sudo apt install -y flatpak
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak install -y flathub com.github.iwalton3.jellyfin-media-player
+```
+
+Launch it (`flatpak run com.github.iwalton3.jellyfin-media-player`), point it at
+`http://localhost:8096`, and log in with the Jellyfin account you created above.
+Set it full-screen for the TV.
+
+If you enabled auto-login in step 1, you can also set this to autostart on login
+(Xubuntu: Settings → Session and Startup → Application Autostart → add the same
+`flatpak run ...` command) so powering on the laptop goes straight to a
+ready-to-browse screen.
+
+## 8. Verify
+
+- Play a file locally through Jellyfin Media Player on the TV — confirm HDMI
+  video/audio output and that playback is direct (check the file's playback info
+  in Jellyfin for "Direct Play" vs "Transcode").
+- Reboot the laptop; confirm the drive remounts (first access after boot),
+  Jellyfin comes back up on its own, and (if autostart is set) the player is
+  ready without touching the keyboard.
+- Confirm SSH still works from another machine on the LAN (`ssh <user>@<laptop-ip>`)
+  — this is your only remote path now, so verify it before you stop needing to
+  sit at the TV with the keyboard for admin tasks.
 - Unplug/replug the drive while the container is running and confirm the
   recovery steps in section 3 work: access `/mnt/media` to retrigger the
   automount, then `systemctl --user restart jellyfin.service`.
@@ -164,3 +228,13 @@ host with real filesystem access for its Postgres DB (no NTFS/exFAT), which
 this laptop already satisfies — the Raspberry Pi 4 on hand is not a good fit
 for Immich's ML features (ARM). RAID/DAS/multi-drive scaling stays out of
 scope until this phase is validated.
+
+## Eventual target (budget allowing)
+
+This whole laptop-plus-USB-drive-plus-TV arrangement is a stand-in for real
+hardware, not the destination. Once budget allows, migrate to the original full
+build plan: a dedicated mini PC or NAS-class box, proper multi-drive storage
+(RAID via `mdadm`), running headless and tucked away — with the
+keyboard/mouse/HDMI-to-TV setup retired in favor of streaming to whatever
+client devices are on the network (smart TV apps, phones, etc.) instead of
+local playback on the server itself.
