@@ -1,0 +1,8 @@
+[Unit]
+Description=Media USB Drive (WD10000H1U-00)
+
+[Mount]
+What=/dev/disk/by-uuid/REPLACE-WITH-UUID
+Where=/mnt/media
+Type=ext4
+Options=defaults
