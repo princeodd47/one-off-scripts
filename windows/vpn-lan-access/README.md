@@ -64,13 +64,17 @@ Run from an **elevated** PowerShell window (admin rights required).
 .\wfp-lan-permit.ps1 -Add -Verify
 ```
 
-`test-lan-access.ps1` is a quick connectivity check — tries a TCP connect
-and tells you whether a failure is an actual local block (the WFP kill
-switch) versus anything else (e.g. nothing listening on that port):
+`test-lan-access.ps1` runs the full verification suite: VPN tunnel actually
+up, LAN reachable, non-LAN traffic not leaking, and the inbound firewall
+rule still present. No elevation required.
 
 ```powershell
 .\test-lan-access.ps1                                # tests 192.168.0.1:80
 .\test-lan-access.ps1 -TargetIp 192.168.0.5 -Port 443
+
+# Add the leak check by passing your real WAN IP at runtime (deliberately
+# not a stored default, since this repo is public)
+.\test-lan-access.ps1 -RealWanIp 203.0.113.45
 ```
 
 **Note:** because PowerShell can't recompile an already-loaded type in the
