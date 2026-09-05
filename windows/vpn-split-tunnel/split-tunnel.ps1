@@ -322,7 +322,11 @@ function Add-SiteIp {
 
     $routeExists = Get-NetRoute -DestinationPrefix "$Ip/32" -ErrorAction SilentlyContinue
     if (-not $routeExists) {
-        New-NetRoute -DestinationPrefix "$Ip/32" -InterfaceIndex $RealIfIndex -NextHop $RealGateway -RouteMetric 1 -PolicyStore $PolicyStore | Out-Null
+        # New-NetRoute has no "PersistentStore" value to pass - persistent is just
+        # what happens when -PolicyStore is omitted. Only ever pass "ActiveStore".
+        $routeParams = @{ DestinationPrefix = "$Ip/32"; InterfaceIndex = $RealIfIndex; NextHop = $RealGateway; RouteMetric = 1 }
+        if ($PolicyStore -eq "ActiveStore") { $routeParams.PolicyStore = "ActiveStore" }
+        New-NetRoute @routeParams | Out-Null
     }
 
     $filterKey = [Guid]::NewGuid()
