@@ -22,10 +22,14 @@ Usage:
     python3 archive.py --limit 2       # only the 2 most recent articles (test run)
     python3 archive.py --skip-pdf      # only download HTML
     python3 archive.py --skip-html     # only convert already-downloaded HTML
+    python3 archive.py --override      # re-download/re-render even if files already exist
+    python3 archive.py --combine       # also merge pdf/*.pdf into combined.pdf
+    python3 archive.py --combine-only  # skip discover/download/convert, just (re-)merge existing PDFs
 
 Requires: google-chrome (or set CHROME_BIN) for the PDF step, and gs
-(Ghostscript, optional but strongly recommended) for PDF compression. No
-third-party Python packages needed.
+(Ghostscript) for PDF compression and for --combine/--combine-only (optional
+for a plain run, required for those two flags). No third-party Python
+packages needed.
 """
 
 import argparse
@@ -48,6 +52,7 @@ PER_PAGE = 100
 SCRIPT_DIR = Path(__file__).resolve().parent
 HTML_DIR = SCRIPT_DIR / "html"
 PDF_DIR = SCRIPT_DIR / "pdf"
+COMBINED_PDF = SCRIPT_DIR / "combined.pdf"
 
 # For printing into a binder we only want the story itself: strip the site
 # nav/menu, breadcrumb trail, and footer via CSS, and remove the "World of
@@ -119,13 +124,13 @@ def discover_articles(limit: int | None = None) -> list[dict]:
     return articles
 
 
-def download_html(articles: list[dict]) -> None:
+def download_html(articles: list[dict], override: bool = False) -> None:
     HTML_DIR.mkdir(parents=True, exist_ok=True)
     print(f"\nDownloading {len(articles)} stories to {HTML_DIR}/")
     for i, article in enumerate(articles, 1):
         slug = article["slug"]
         dest = HTML_DIR / f"{slug}.html"
-        if dest.exists():
+        if dest.exists() and not override:
             print(f"  [{i}/{len(articles)}] {slug} (already saved)")
             continue
         try:
@@ -215,7 +220,7 @@ def compress_pdf(gs_bin: str, pdf_file: Path) -> None:
         compressed.unlink(missing_ok=True)
 
 
-def convert_to_pdf(chrome_bin: str, gs_bin: str | None) -> None:
+def convert_to_pdf(chrome_bin: str, gs_bin: str | None, override: bool = False) -> None:
     html_files = sorted(HTML_DIR.glob("*.html"))
     if not html_files:
         print(f"No HTML files found in {HTML_DIR}/, nothing to convert.")
@@ -225,7 +230,7 @@ def convert_to_pdf(chrome_bin: str, gs_bin: str | None) -> None:
     print(f"\nConverting {len(html_files)} stories to PDF in {PDF_DIR}/")
     for i, html_file in enumerate(html_files, 1):
         pdf_file = PDF_DIR / f"{html_file.stem}.pdf"
-        if pdf_file.exists():
+        if pdf_file.exists() and not override:
             print(f"  [{i}/{len(html_files)}] {html_file.stem} (already converted)")
             continue
 
@@ -241,26 +246,71 @@ def convert_to_pdf(chrome_bin: str, gs_bin: str | None) -> None:
         print(f"  [{i}/{len(html_files)}] {html_file.stem} ({size_kb} KB)")
 
 
+def combine_pdfs(gs_bin: str) -> None:
+    """Merge every pdf/*.pdf into a single combined.pdf via Ghostscript, in
+    the same (alphabetical-by-slug) order they're written in."""
+    pdf_files = sorted(PDF_DIR.glob("*.pdf"))
+    if not pdf_files:
+        print(f"No PDFs found in {PDF_DIR}/, nothing to combine.")
+        return
+
+    print(f"\nCombining {len(pdf_files)} PDFs into {COMBINED_PDF}")
+    result = subprocess.run(
+        [
+            gs_bin,
+            "-sDEVICE=pdfwrite",
+            "-dCompatibilityLevel=1.4",
+            "-dNOPAUSE",
+            "-dQUIET",
+            "-dBATCH",
+            "-sOutputFile=" + str(COMBINED_PDF),
+            *(str(p) for p in pdf_files),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    if result.returncode != 0 or not COMBINED_PDF.exists():
+        print(f"  FAILED: {result.stderr.strip()[:300]}")
+        return
+
+    size_mb = COMBINED_PDF.stat().st_size / (1024 * 1024)
+    print(f"  wrote {COMBINED_PDF.name} ({size_mb:.1f} MB, {len(pdf_files)} stories)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-html", action="store_true", help="skip discovery/download, convert existing HTML only")
     parser.add_argument("--skip-pdf", action="store_true", help="only discover and download HTML, skip PDF conversion")
     parser.add_argument("--limit", type=int, help="only process the N most recent articles (for test runs)")
+    parser.add_argument("--override", action="store_true", help="re-download HTML and re-render PDFs even if already present")
+    parser.add_argument("--combine", action="store_true", help="after converting, also merge pdf/*.pdf into combined.pdf")
+    parser.add_argument("--combine-only", action="store_true", help="skip discover/download/convert; just (re-)merge existing PDFs into combined.pdf")
     args = parser.parse_args()
 
-    if not args.skip_html:
+    skip_html = args.skip_html or args.combine_only
+    skip_pdf = args.skip_pdf or args.combine_only
+    combine = args.combine or args.combine_only
+
+    if not skip_html:
         articles = discover_articles(limit=args.limit)
         if not articles:
             sys.exit("No articles discovered; aborting.")
-        download_html(articles)
+        download_html(articles, override=args.override)
 
-    if not args.skip_pdf:
+    if not skip_pdf:
         chrome_bin = find_chrome()
         gs_bin = shutil.which("gs")
         if not gs_bin:
             print("Note: Ghostscript ('gs') not found, skipping PDF compression "
                   "(files will be much larger).")
-        convert_to_pdf(chrome_bin, gs_bin)
+        convert_to_pdf(chrome_bin, gs_bin, override=args.override)
+
+    if combine:
+        gs_bin = shutil.which("gs")
+        if not gs_bin:
+            sys.exit("Ghostscript ('gs') is required for --combine/--combine-only.")
+        combine_pdfs(gs_bin)
 
     print("\nDone.")
 

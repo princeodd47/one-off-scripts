@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Archive every article on rathetimes.com as HTML + PDF.
+"""Archive every article on fabrec.gg/articles/ as HTML + PDF.
 
-Crawls the paginated article listing (?page=N) to discover article slugs,
-downloads each article's HTML, then renders each saved HTML file to PDF
-using headless Chrome. Safe to re-run: existing files are skipped, so an
-interrupted run just picks up where it left off.
+Discovers articles via the WordPress REST API (much more reliable than
+scraping the listing page), downloads each article's live HTML, then
+renders each saved HTML file to PDF using headless Chrome. Safe to re-run:
+existing files are skipped, so an interrupted run just picks up where it
+left off.
 
 Usage:
     python3 archive.py                 # full run: discover, download, convert
@@ -18,7 +19,7 @@ Python packages needed.
 """
 
 import argparse
-import re
+import json
 import shutil
 import subprocess
 import sys
@@ -28,89 +29,88 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-BASE_URL = "https://rathetimes.com"
-USER_AGENT = "Mozilla/5.0 (rathetimes-archive/1.0; personal archival script)"
+# The site's REST API for the WordPress instance backing /articles/ lives
+# under that same path prefix (not at the domain root).
+API_URL = "https://fabrec.gg/articles/wp-json/wp/v2/posts"
+USER_AGENT = "Mozilla/5.0 (compatible; fabrec-archive/1.0; personal archival script)"
 REQUEST_DELAY_SECONDS = 0.75
+PER_PAGE = 100
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 HTML_DIR = SCRIPT_DIR / "html"
 PDF_DIR = SCRIPT_DIR / "pdf"
 
-ARTICLE_HREF_RE = re.compile(r'href="/articles/([a-z0-9\-]+)"')
-
-# The site's header contains an Alpine.js mobile-nav drawer that is
-# position:fixed and only gets hidden once client-side JS runs. Headless
-# Chrome's one-shot print doesn't reliably run that JS in time, so the drawer
-# renders as a full-page overlay on every printed page. It also has a large
-# tiled SVG background pattern that Chrome rasterizes at full resolution on
-# every page. Neither is article content, so strip both before printing.
+# Strip the site nav and footer, plus the tags sidebar (not article content),
+# via injected CSS. Applied to a temp copy only — the saved archival HTML in
+# html/*.html is left untouched.
 PRINT_CSS_OVERRIDE = (
-    "<style>header{display:none!important}"
-    ".bg-grid-light,.bg-grid-dark{background-image:none!important}</style></head>"
+    "<style>nav.navbar,.footer,.blog-sidebar{display:none!important}</style></head>"
 )
 
 
-def fetch(url: str) -> str:
+def fetch(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+        return resp.read()
 
 
-def discover_article_slugs(limit: int | None = None) -> list[str]:
-    """Newest-first. With `limit` set, stops as soon as that many slugs are
-    found instead of crawling every page — useful for a quick test run."""
-    print("Discovering articles via pagination...")
-    slugs: list[str] = []
-    seen = set()
+def discover_articles(limit: int | None = None) -> list[dict]:
+    """Newest-first (the API's default order). With `limit` set, stops as
+    soon as that many articles are found — useful for a quick test run."""
+    print("Discovering articles via the WP REST API...")
+    articles: list[dict] = []
     page = 1
     while True:
-        url = f"{BASE_URL}/?page={page}"
+        url = f"{API_URL}?per_page={PER_PAGE}&page={page}&_fields=slug,link"
         try:
-            html = fetch(url)
+            body = fetch(url)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 400:
+                # WP returns 400 once you page past the last page.
+                break
+            print(f"  page {page}: request failed ({exc}), stopping")
+            break
         except urllib.error.URLError as exc:
             print(f"  page {page}: request failed ({exc}), stopping")
             break
 
-        found = ARTICLE_HREF_RE.findall(html)
-        new_on_page = [s for s in found if s not in seen]
-        if not found:
-            print(f"  page {page}: no articles found, stopping")
+        batch = json.loads(body)
+        if not batch:
             break
 
-        for slug in found:
-            if slug not in seen:
-                seen.add(slug)
-                slugs.append(slug)
+        articles.extend(batch)
+        print(f"  page {page}: {len(batch)} articles (total {len(articles)})")
 
-        print(f"  page {page}: {len(found)} links, {len(new_on_page)} new (total {len(slugs)})")
-
-        if limit is not None and len(slugs) >= limit:
-            slugs = slugs[:limit]
+        if limit is not None and len(articles) >= limit:
+            articles = articles[:limit]
             print(f"  reached limit of {limit}, stopping")
+            break
+
+        if len(batch) < PER_PAGE:
             break
 
         page += 1
         time.sleep(REQUEST_DELAY_SECONDS)
 
-    return slugs
+    return articles
 
 
-def download_html(slugs: list[str], override: bool = False) -> None:
+def download_html(articles: list[dict], override: bool = False) -> None:
     HTML_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"\nDownloading {len(slugs)} articles to {HTML_DIR}/")
-    for i, slug in enumerate(slugs, 1):
+    print(f"\nDownloading {len(articles)} articles to {HTML_DIR}/")
+    for i, article in enumerate(articles, 1):
+        slug = article["slug"]
         dest = HTML_DIR / f"{slug}.html"
         if dest.exists() and not override:
-            print(f"  [{i}/{len(slugs)}] {slug} (already saved)")
+            print(f"  [{i}/{len(articles)}] {slug} (already saved)")
             continue
-        url = f"{BASE_URL}/articles/{slug}"
         try:
-            html = fetch(url)
+            html = fetch(article["link"])
         except urllib.error.URLError as exc:
-            print(f"  [{i}/{len(slugs)}] {slug} FAILED: {exc}")
+            print(f"  [{i}/{len(articles)}] {slug} FAILED: {exc}")
             continue
-        dest.write_text(html, encoding="utf-8")
-        print(f"  [{i}/{len(slugs)}] {slug}")
+        dest.write_bytes(html)
+        print(f"  [{i}/{len(articles)}] {slug}")
         time.sleep(REQUEST_DELAY_SECONDS)
 
 
@@ -225,10 +225,10 @@ def main() -> None:
     args = parser.parse_args()
 
     if not args.skip_html:
-        slugs = discover_article_slugs(limit=args.limit)
-        if not slugs:
+        articles = discover_articles(limit=args.limit)
+        if not articles:
             sys.exit("No articles discovered; aborting.")
-        download_html(slugs, override=args.override)
+        download_html(articles, override=args.override)
 
     if not args.skip_pdf:
         chrome_bin = find_chrome()

@@ -36,6 +36,7 @@ python3 archive.py                 # discover, download, and convert everything
 python3 archive.py --limit 2       # only the 2 most recent articles (test run)
 python3 archive.py --skip-pdf      # only download HTML (no Chrome needed)
 python3 archive.py --skip-html     # only convert already-downloaded HTML
+python3 archive.py --override      # re-download/re-render even if files already exist
 ```
 
 The listing is newest-first, so `--limit N` stops discovery as soon as it has

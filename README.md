@@ -6,3 +6,5 @@ Scripts which are needed but may not be reusable.
 - [`linux/jellyfin-media-center`](linux/jellyfin-media-center) - rootless Podman/Quadlet Jellyfin setup on a spare laptop with a directly-attached USB drive.
 - [`linux/rathetimes-archive`](linux/rathetimes-archive) - archives every article on rathetimes.com as HTML + PDF.
 - [`linux/fabtcg-stories-archive`](linux/fabtcg-stories-archive) - archives every story on fabtcg.com/stories/ as HTML + PDF.
+- [`linux/fabrec-articles-archive`](linux/fabrec-articles-archive) - archives every article on fabrec.gg/articles/ as HTML + PDF.
+- [`windows/terraria-autofish`](windows/terraria-autofish) - watches the fishing lure's pixel color and auto-clicks to reel in/recast when a fish bites.

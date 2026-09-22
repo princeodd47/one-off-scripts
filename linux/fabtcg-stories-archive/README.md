@@ -29,9 +29,11 @@ adapted for this site and tuned for print rather than screen archival.
 
 Order is whatever the API returns (newest-first); there's no in-universe
 chronology exposed anywhere in the site's data, so this doesn't attempt to
-sort by story timeline. Each article is its own PDF rather than one
-combined file, so you can reprint or reorder individual stories in the
-binder.
+sort by story timeline. Each article is its own PDF, so you can reprint or
+reorder individual stories in the binder. Pass `--combine` (or
+`--combine-only`) to also merge everything in `pdf/` into a single
+`combined.pdf` (alphabetical by slug, same order the per-article PDFs are
+written in) — handy for taking the whole archive to a print shop.
 
 **WAF note:** fabtcg.com blocks any request whose `User-Agent` doesn't
 start with `Mozilla/5.0` (a 403, regardless of `robots.txt`, which allows
@@ -47,17 +49,22 @@ python3 archive.py                 # discover, download, and convert everything
 python3 archive.py --limit 2       # only the 2 most recent articles (test run)
 python3 archive.py --skip-pdf      # only download HTML (no Chrome needed)
 python3 archive.py --skip-html     # only convert already-downloaded HTML
+python3 archive.py --override      # re-download/re-render even if files already exist
+python3 archive.py --combine       # also merge pdf/*.pdf into combined.pdf
+python3 archive.py --combine-only  # skip discover/download/convert, just (re-)merge existing PDFs
 ```
 
-Output goes to `html/` and `pdf/` next to the script (git-ignored).
+Output goes to `html/` and `pdf/` next to the script (git-ignored), plus
+`combined.pdf` if `--combine`/`--combine-only` is used.
 
 ## Requirements
 
 - Python 3.10+, stdlib only (no pip installs).
 - `google-chrome` (or another Chromium build) for the PDF step. Set
   `CHROME_BIN` to override which binary is used.
-- `gs` (Ghostscript) for PDF compression. Optional — if missing, PDFs are
-  still produced, just much larger.
+- `gs` (Ghostscript) for PDF compression. Optional for a plain run (PDFs
+  are still produced, just much larger) but required for
+  `--combine`/`--combine-only`.
 
 Checked `robots.txt` first: `User-agent: * / Disallow:` — nothing
 disallowed. The script adds a ~0.75s delay between requests to stay polite.
