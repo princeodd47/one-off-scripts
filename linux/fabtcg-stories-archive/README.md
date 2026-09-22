@@ -68,8 +68,10 @@ chronological) filename order — handy for taking the whole archive to a
 print shop. `COMBINE_EXCLUDE_MARKERS` leaves non-story entries out of that
 merge (still archived normally in `html/`/`pdf/`, just not in
 `combined.pdf`): "Roll of Honor" leaderboard pages (e.g.
-`roll-of-honor-viserai`) and "\<Hero\> – Learn" how-to-play guides (e.g.
-`rhinar-learn`), neither of which is a lore story.
+`roll-of-honor-viserai`), "\<Hero\> – Learn" how-to-play guides (e.g.
+`rhinar-learn`), and set pre-release preview articles (e.g.
+`outsiders-pre-release-primer`, `the-hunted-primer`) — none of which is a
+lore story.
 
 **WAF note:** fabtcg.com blocks any request whose `User-Agent` doesn't
 start with `Mozilla/5.0` (a 403, regardless of `robots.txt`, which allows

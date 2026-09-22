@@ -63,9 +63,18 @@ COMBINED_PDF = SCRIPT_DIR / "combined.pdf"
 # (it has no stable wrapper of its own, so it's removed via a small script
 # instead of a CSS selector). Applied to a temp copy only — the saved
 # archival HTML in html/*.html is left untouched.
+#
+# Article images are also full-bleed/full-width by the site's own screen
+# CSS, with nothing constraining print size, so many render at near-full-
+# page, pushing pages down to a single sentence of text. Cap display size
+# for print instead — this does trade off some of the "big hero art" look
+# this archive is otherwise tuned for, in exchange for a more compact,
+# printable binder.
 PRINT_OVERRIDE = """
 <style>
 header#masthead, .breadcrumbs, footer#colophon, a.sr-only { display:none!important }
+img { max-width:100%!important; max-height:4in!important; width:auto!important;
+      height:auto!important; object-fit:contain!important }
 </style>
 <script>
 document.querySelectorAll('h2.wp-block-heading').forEach(function (h) {
@@ -353,7 +362,9 @@ def convert_to_pdf(chrome_bin: str, gs_bin: str | None, override: bool = False) 
 #   "roll-of-honor": a leaderboard feature (e.g. "Roll of Honor: Viserai").
 #   "learn": "<Hero> – Learn" how-to-play guides (rhinar-learn,
 #     azalea-learn, azalea-learn-aiming-high, the bare "learn" for katsu).
-COMBINE_EXCLUDE_MARKERS = ("roll-of-honor", "learn")
+#   "primer": set pre-release preview articles (outsiders-pre-release-
+#     primer, the-hunted-primer), not lore.
+COMBINE_EXCLUDE_MARKERS = ("roll-of-honor", "learn", "primer")
 
 
 def combine_pdfs(gs_bin: str) -> None:
