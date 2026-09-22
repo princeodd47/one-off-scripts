@@ -73,7 +73,7 @@ COMBINED_PDF = SCRIPT_DIR / "combined.pdf"
 PRINT_OVERRIDE = """
 <style>
 header#masthead, .breadcrumbs, footer#colophon, a.sr-only { display:none!important }
-img { max-width:100%!important; max-height:4in!important; width:auto!important;
+img { max-width:100%!important; max-height:2.75in!important; width:auto!important;
       height:auto!important; object-fit:contain!important }
 </style>
 <script>

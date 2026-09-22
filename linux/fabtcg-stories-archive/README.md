@@ -33,9 +33,20 @@ Article art is full-bleed/full-width by the site's own screen CSS, with
 nothing constraining print size, so many images rendered at near-full-page
 — a single sentence of body text sharing a page with an image several
 times its needed size. `PRINT_OVERRIDE` caps display size
-(`max-height:4in`) for print instead, trading some of the "big hero art"
-look this archive is otherwise tuned for in exchange for a shorter, more
-printable binder.
+(`max-height:2.75in`) for print instead, trading some of the "big hero
+art" look this archive is otherwise tuned for in exchange for a shorter,
+cheaper-to-print binder.
+
+Chrome won't split an `<img>` across a page break, so even with a size
+cap, an image that doesn't quite fit the remaining space on a page gets
+pushed whole to the next one, stranding blank space behind it — worse the
+larger the cap. `2.75in` (down from an initial `4in`) was chosen by testing
+against the most image-dense story in the catalog ("Part 3: The Serpent's
+Strike," 15 images in a 12-page story): dropped it to 9 pages with images
+still clearly legible. This cap is specific to fabtcg-stories-archive —
+`../rathetimes-archive` and `../fabrec-articles-archive` keep the original
+`4in`, since neither is built around a single combined print artifact the
+way `combined.pdf` here is.
 
 A handful of stories embed a Vimeo video (hero reveal trailers). Chrome's
 `--print-to-pdf` doesn't render cross-origin iframes, which left blank
