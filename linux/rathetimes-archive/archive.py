@@ -130,7 +130,7 @@ def find_chrome() -> str:
 def render_pdf(chrome_bin: str, html_file: Path, pdf_file: Path) -> tuple[bool, str]:
     """Render html_file to pdf_file via headless Chrome, with print CSS
     overrides applied to a temp copy so the saved archival HTML is untouched."""
-    html = html_file.read_text(encoding="utf-8")
+    html = html_file.read_text(encoding="utf-8", errors="replace")
     stripped_html = html.replace("</head>", PRINT_CSS_OVERRIDE, 1)
 
     with tempfile.NamedTemporaryFile(
