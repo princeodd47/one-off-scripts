@@ -34,12 +34,15 @@ packages needed.
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
+import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -83,6 +86,25 @@ def fetch(url: str) -> bytes:
         return resp.read()
 
 
+def sanitize_slug(slug: str, fallback: str) -> str:
+    """Make a WP slug safe/sane for use in a filename. A couple of
+    fabtcg.com story slugs (in-universe "corrupted text" effects) are
+    percent-encoded combining-mark soup, e.g. a slug containing literal
+    `%cc%b8%cd%8d...` that decodes to "p̸͍̬̭̭̺͉̣̐̾͆̚r̴͔͍͐ȯ̴̤̰͠t̵̰̘͑o̶͍" — dozens of
+    stacked Unicode combining marks on five base letters. Percent-decode,
+    NFKD-normalize and drop combining marks to recover the base letters
+    ("proto"), then strip anything left that isn't alphanumeric/hyphen. If
+    nothing usable survives, fall back to the WP post id so the filename
+    still exists and is unique."""
+    decoded = urllib.parse.unquote(slug)
+    stripped = "".join(
+        ch for ch in unicodedata.normalize("NFKD", decoded)
+        if not unicodedata.combining(ch)
+    )
+    cleaned = re.sub(r"[^a-z0-9]+", "-", stripped.lower()).strip("-")
+    return cleaned or f"story-{fallback}"
+
+
 def assign_stems(articles: list[dict]) -> dict[str, str]:
     """Filename stem per story: its WordPress `date` prefixed onto the slug,
     so files sort chronologically and combine_pdfs' plain alphabetical merge
@@ -103,10 +125,13 @@ def assign_stems(articles: list[dict]) -> dict[str, str]:
     stems: dict[str, str] = {}
     for date, group in by_date.items():
         if len(group) == 1:
-            stems[group[0]["slug"]] = f"{date}-{group[0]['slug']}"
+            article = group[0]
+            slug = sanitize_slug(article["slug"], article["id"])
+            stems[article["slug"]] = f"{date}-{slug}"
             continue
         for seq, article in enumerate(sorted(group, key=lambda a: a["id"])):
-            stems[article["slug"]] = f"{date}-{seq:03d}-{article['slug']}"
+            slug = sanitize_slug(article["slug"], article["id"])
+            stems[article["slug"]] = f"{date}-{seq:03d}-{slug}"
     return stems
 
 
@@ -274,15 +299,23 @@ def convert_to_pdf(chrome_bin: str, gs_bin: str | None, override: bool = False) 
 
 
 def combine_pdfs(gs_bin: str) -> None:
-    """Merge every pdf/*.pdf into a single combined.pdf via Ghostscript.
-    Filenames are date-prefixed (see archive_stem), so the plain alphabetical
-    glob order here is also chronological, oldest story first."""
-    pdf_files = sorted(PDF_DIR.glob("*.pdf"))
+    """Merge pdf/*.pdf into a single combined.pdf via Ghostscript. Filenames
+    are date-prefixed (see assign_stems), so the plain alphabetical glob
+    order here is also chronological, oldest story first.
+
+    "Roll of Honor" entries (slug contains "roll-of-honor") are excluded:
+    they're a leaderboard feature, not a story, and don't belong in a
+    combined reading copy — but they're still archived normally in pdf/
+    like everything else, just left out of this merge."""
+    all_pdfs = sorted(PDF_DIR.glob("*.pdf"))
+    pdf_files = [p for p in all_pdfs if "roll-of-honor" not in p.stem]
+    excluded = len(all_pdfs) - len(pdf_files)
     if not pdf_files:
         print(f"No PDFs found in {PDF_DIR}/, nothing to combine.")
         return
 
-    print(f"\nCombining {len(pdf_files)} PDFs into {COMBINED_PDF}")
+    print(f"\nCombining {len(pdf_files)} PDFs into {COMBINED_PDF}"
+          + (f" ({excluded} Roll of Honor excluded)" if excluded else ""))
     result = subprocess.run(
         [
             gs_bin,

@@ -47,11 +47,19 @@ falling back to alphabetical-by-title. `id` order tracks the site's
 original ordering far more reliably than the title text does, since it's
 assigned in whatever order the importer processed the old site's stories.
 
+A couple of story slugs are "in-universe corrupted text" effects — stacks
+of Unicode combining marks on a handful of base letters, percent-encoded in
+the raw slug — which would otherwise produce unusable filenames.
+`sanitize_slug()` decodes and strips those down to the base letters (e.g.
+`teklovossen-story-proto`) before building the filename.
+
 Each article is its own PDF, so you can reprint or reorder individual
 stories in the binder. Pass `--combine` (or `--combine-only`) to also merge
 everything in `pdf/` into a single `combined.pdf`, in the same (now
 chronological) filename order — handy for taking the whole archive to a
-print shop.
+print shop. "Roll of Honor" entries (leaderboard pages, not stories — e.g.
+`roll-of-honor-viserai`) are still archived normally in `html/`/`pdf/` but
+are excluded from `combined.pdf`.
 
 **WAF note:** fabtcg.com blocks any request whose `User-Agent` doesn't
 start with `Mozilla/5.0` (a 403, regardless of `robots.txt`, which allows
