@@ -15,18 +15,33 @@ approach.
    `fabrec.gg/articles/wp-json/wp/v2/posts` rather than the usual
    `fabrec.gg/wp-json/...`. One paginated crawl at `per_page=100` covers the
    whole catalog (270 articles as of this writing, 3 pages).
-2. Downloads each article's HTML as-is to `html/<slug>.html`.
-3. Renders each to `pdf/<slug>.pdf` via headless Chrome, stripping the site
-   nav, footer, and the tags sidebar so the PDF is just the article, its
-   art, and the author bio. (Only the temp copy used for rendering is
-   modified; the saved `html/*.html` files are untouched.)
+2. Downloads each article's HTML as-is to
+   `html/<date>[-<seq>]-<slug>.html` (see "File naming" below).
+3. Renders each to `pdf/<date>[-<seq>]-<slug>.pdf` via headless Chrome,
+   stripping the site nav, footer, and the tags sidebar so the PDF is just
+   the article, its art, and the author bio. (Only the temp copy used for
+   rendering is modified; the saved `html/*.html` files are untouched.)
 4. Recompresses the PDF with Ghostscript (`/ebook` preset) — Chrome's
    `--print-to-pdf` embeds photos as raw full-resolution bitmaps, so an
    uncompressed run produces large PDFs; this brings each down to a few
    hundred KB with no visible quality loss on screen.
 
-Order is whatever the API returns (newest-first). Each article is its own
-PDF rather than one combined file.
+### File naming
+
+Files are named `<date>-<slug>` (e.g.
+`2024-10-30-precon-progression-verdance-blitz-deck.pdf`), using each
+article's WordPress `date` field, so `html/`/`pdf/` sort chronologically
+instead of alphabetically by title. Unlike `../fabtcg-stories-archive`'s
+bulk-migrated catalog, fabrec's dates look like genuine original publish
+dates — 263 of 270 articles have a distinct date, spanning 2023-05-02 to
+2024-10-30. Where a handful of articles do share a date, the filename gets
+a zero-padded sequence number too — `<date>-<seq>-<slug>` — ordered by
+each article's WordPress post `id` (monotonically increasing, no ties)
+rather than falling back to alphabetical-by-title.
+
+Order is whatever the API returns (newest-first) for the discovery/log
+output above, but the saved filenames are chronological as described.
+Each article is its own PDF rather than one combined file.
 
 Re-running the script is safe: both the download and convert steps skip
 files that already exist, so an interrupted run just resumes.

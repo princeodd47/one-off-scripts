@@ -54,6 +54,28 @@ def fetch(url: str) -> bytes:
         return resp.read()
 
 
+def assign_stems(articles: list[dict]) -> dict[str, str]:
+    """Filename stem per article: its WordPress `date` prefixed onto the
+    slug, so html/*.html and pdf/*.pdf sort chronologically instead of
+    alphabetically by title. Where multiple articles share a date (rare
+    here — unlike fabtcg-stories-archive's bulk-migrated catalog, fabrec's
+    dates look like genuine original publish dates), the tie is broken with
+    a zero-padded sequence number ordered by WP post `id` (monotonically
+    increasing, no ties) rather than falling back to alphabetical-by-slug."""
+    by_date: dict[str, list[dict]] = {}
+    for article in articles:
+        by_date.setdefault(article["date"][:10], []).append(article)
+
+    stems: dict[str, str] = {}
+    for date, group in by_date.items():
+        if len(group) == 1:
+            stems[group[0]["slug"]] = f"{date}-{group[0]['slug']}"
+            continue
+        for seq, article in enumerate(sorted(group, key=lambda a: a["id"])):
+            stems[article["slug"]] = f"{date}-{seq:03d}-{article['slug']}"
+    return stems
+
+
 def discover_articles(limit: int | None = None) -> list[dict]:
     """Newest-first (the API's default order). With `limit` set, stops as
     soon as that many articles are found — useful for a quick test run."""
@@ -61,7 +83,7 @@ def discover_articles(limit: int | None = None) -> list[dict]:
     articles: list[dict] = []
     page = 1
     while True:
-        url = f"{API_URL}?per_page={PER_PAGE}&page={page}&_fields=slug,link"
+        url = f"{API_URL}?per_page={PER_PAGE}&page={page}&_fields=slug,link,date,id"
         try:
             body = fetch(url)
         except urllib.error.HTTPError as exc:
@@ -95,22 +117,22 @@ def discover_articles(limit: int | None = None) -> list[dict]:
     return articles
 
 
-def download_html(articles: list[dict], override: bool = False) -> None:
+def download_html(articles: list[dict], stems: dict[str, str], override: bool = False) -> None:
     HTML_DIR.mkdir(parents=True, exist_ok=True)
     print(f"\nDownloading {len(articles)} articles to {HTML_DIR}/")
     for i, article in enumerate(articles, 1):
-        slug = article["slug"]
-        dest = HTML_DIR / f"{slug}.html"
+        stem = stems[article["slug"]]
+        dest = HTML_DIR / f"{stem}.html"
         if dest.exists() and not override:
-            print(f"  [{i}/{len(articles)}] {slug} (already saved)")
+            print(f"  [{i}/{len(articles)}] {stem} (already saved)")
             continue
         try:
             html = fetch(article["link"])
         except urllib.error.URLError as exc:
-            print(f"  [{i}/{len(articles)}] {slug} FAILED: {exc}")
+            print(f"  [{i}/{len(articles)}] {stem} FAILED: {exc}")
             continue
         dest.write_bytes(html)
-        print(f"  [{i}/{len(articles)}] {slug}")
+        print(f"  [{i}/{len(articles)}] {stem}")
         time.sleep(REQUEST_DELAY_SECONDS)
 
 
@@ -228,7 +250,7 @@ def main() -> None:
         articles = discover_articles(limit=args.limit)
         if not articles:
             sys.exit("No articles discovered; aborting.")
-        download_html(articles, override=args.override)
+        download_html(articles, assign_stems(articles), override=args.override)
 
     if not args.skip_pdf:
         chrome_bin = find_chrome()
