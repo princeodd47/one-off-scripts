@@ -65,9 +65,11 @@ Each article is its own PDF, so you can reprint or reorder individual
 stories in the binder. Pass `--combine` (or `--combine-only`) to also merge
 everything in `pdf/` into a single `combined.pdf`, in the same (now
 chronological) filename order — handy for taking the whole archive to a
-print shop. "Roll of Honor" entries (leaderboard pages, not stories — e.g.
-`roll-of-honor-viserai`) are still archived normally in `html/`/`pdf/` but
-are excluded from `combined.pdf`.
+print shop. `COMBINE_EXCLUDE_MARKERS` leaves non-story entries out of that
+merge (still archived normally in `html/`/`pdf/`, just not in
+`combined.pdf`): "Roll of Honor" leaderboard pages (e.g.
+`roll-of-honor-viserai`) and "\<Hero\> – Learn" how-to-play guides (e.g.
+`rhinar-learn`), neither of which is a lore story.
 
 **WAF note:** fabtcg.com blocks any request whose `User-Agent` doesn't
 start with `Mozilla/5.0` (a 403, regardless of `robots.txt`, which allows

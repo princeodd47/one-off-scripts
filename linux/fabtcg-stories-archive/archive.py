@@ -345,24 +345,31 @@ def convert_to_pdf(chrome_bin: str, gs_bin: str | None, override: bool = False) 
         print(f"  [{i}/{len(html_files)}] {html_file.stem} ({size_kb} KB)")
 
 
+
+# Slugs (filename substring match, checked against the stem) of story-listed
+# entries that aren't actually lore stories, so combine_pdfs() leaves them
+# out of the combined reading copy. Still archived normally in pdf/ like
+# everything else — this only affects the merge.
+#   "roll-of-honor": a leaderboard feature (e.g. "Roll of Honor: Viserai").
+#   "learn": "<Hero> – Learn" how-to-play guides (rhinar-learn,
+#     azalea-learn, azalea-learn-aiming-high, the bare "learn" for katsu).
+COMBINE_EXCLUDE_MARKERS = ("roll-of-honor", "learn")
+
+
 def combine_pdfs(gs_bin: str) -> None:
     """Merge pdf/*.pdf into a single combined.pdf via Ghostscript. Filenames
     are date-prefixed (see assign_stems), so the plain alphabetical glob
-    order here is also chronological, oldest story first.
-
-    "Roll of Honor" entries (slug contains "roll-of-honor") are excluded:
-    they're a leaderboard feature, not a story, and don't belong in a
-    combined reading copy — but they're still archived normally in pdf/
-    like everything else, just left out of this merge."""
+    order here is also chronological, oldest story first. Entries matching
+    COMBINE_EXCLUDE_MARKERS are skipped (see above)."""
     all_pdfs = sorted(PDF_DIR.glob("*.pdf"))
-    pdf_files = [p for p in all_pdfs if "roll-of-honor" not in p.stem]
+    pdf_files = [p for p in all_pdfs if not any(m in p.stem for m in COMBINE_EXCLUDE_MARKERS)]
     excluded = len(all_pdfs) - len(pdf_files)
     if not pdf_files:
         print(f"No PDFs found in {PDF_DIR}/, nothing to combine.")
         return
 
     print(f"\nCombining {len(pdf_files)} PDFs into {COMBINED_PDF}"
-          + (f" ({excluded} Roll of Honor excluded)" if excluded else ""))
+          + (f" ({excluded} non-story entries excluded)" if excluded else ""))
     result = subprocess.run(
         [
             gs_bin,
