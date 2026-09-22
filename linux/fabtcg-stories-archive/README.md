@@ -29,6 +29,14 @@ adapted for this site and tuned for print rather than screen archival.
    (tens of MB per article), so this is still a large size reduction, just
    tuned for crisp paper output rather than the smallest possible file.
 
+A handful of stories embed a Vimeo video (hero reveal trailers). Chrome's
+`--print-to-pdf` doesn't render cross-origin iframes, which left blank
+space where the player would be. `replace_vimeo_embeds()` swaps each Vimeo
+iframe for its thumbnail (via Vimeo's oEmbed API) plus a caption pointing
+back to the video (`▶ Betsy Hero Reveal — watch at vimeo.com/896629508`),
+so the PDF shows something in place of empty space. Applied to the temp
+copy only, same as the nav/footer stripping above.
+
 ### File naming
 
 Files are named `<date>-<slug>` (e.g. `2026-05-08-omens-in-the-sky.pdf`),

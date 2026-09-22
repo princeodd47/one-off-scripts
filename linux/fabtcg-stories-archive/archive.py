@@ -86,6 +86,52 @@ def fetch(url: str) -> bytes:
         return resp.read()
 
 
+# Chrome's --print-to-pdf doesn't render cross-origin iframes (e.g. Vimeo's
+# player), leaving blank space where a story's embedded video was. Swap
+# each one for its Vimeo thumbnail (fetched via Vimeo's oEmbed API) plus a
+# caption pointing back to the video, so the PDF shows *something* instead
+# of empty space. Applied to a temp copy only, like PRINT_OVERRIDE above.
+VIMEO_IFRAME_RE = re.compile(
+    r'<iframe[^>]*\bsrc="https://player\.vimeo\.com/video/(\d+)[^"]*"[^>]*></iframe>'
+)
+
+
+def _escape_html(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def fetch_vimeo_thumbnail(video_id: str) -> tuple[str, str] | None:
+    """(thumbnail_url, title) for a Vimeo video via its oEmbed API, or None
+    on any failure (caller then just leaves the iframe as-is)."""
+    url = f"https://vimeo.com/api/oembed.json?url=https://vimeo.com/{video_id}&width=960"
+    try:
+        data = json.loads(fetch(url))
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
+        return None
+    thumbnail_url = data.get("thumbnail_url")
+    if not thumbnail_url:
+        return None
+    return thumbnail_url, data.get("title", "")
+
+
+def replace_vimeo_embeds(html: str) -> str:
+    def _sub(match: re.Match) -> str:
+        video_id = match.group(1)
+        result = fetch_vimeo_thumbnail(video_id)
+        if not result:
+            return match.group(0)
+        thumbnail_url, title = result
+        caption = f"▶ {title} — watch at vimeo.com/{video_id}" if title else f"▶ watch at vimeo.com/{video_id}"
+        return (
+            f'<img src="{_escape_html(thumbnail_url)}" alt="{_escape_html(title)}" '
+            'style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">'
+            '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.65);'
+            f'color:#fff;font-size:13px;padding:6px 10px">{_escape_html(caption)}</div>'
+        )
+
+    return VIMEO_IFRAME_RE.sub(_sub, html)
+
+
 def sanitize_slug(slug: str, fallback: str) -> str:
     """Make a WP slug safe/sane for use in a filename. A couple of
     fabtcg.com story slugs (in-universe "corrupted text" effects) are
@@ -212,6 +258,7 @@ def render_pdf(chrome_bin: str, html_file: Path, pdf_file: Path) -> tuple[bool, 
     """Render html_file to pdf_file via headless Chrome, with the print
     overrides applied to a temp copy so the saved archival HTML is untouched."""
     html = html_file.read_text(encoding="utf-8", errors="replace")
+    html = replace_vimeo_embeds(html)
     stripped_html = html.replace("</body>", PRINT_OVERRIDE, 1)
 
     with tempfile.NamedTemporaryFile(
