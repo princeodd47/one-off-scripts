@@ -104,6 +104,45 @@ def replace_youtube_embeds(html: str) -> str:
     return YOUTUBE_IFRAME_RE.sub(_sub, html)
 
 
+PUBLISHED_TIME_RE = re.compile(r'article:published_time"\s*content="([^"]+)"')
+# A previously-saved stem is <date>-<HHMMSS>-<slug>; strip that known
+# prefix to recover the slug (which may itself contain hyphens).
+STEM_DATE_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-\d{6}-")
+
+
+def stem_for(slug: str, html: str) -> str:
+    """Filename stem for an article: its `article:published_time` OG meta
+    tag (present on every article page, full YYYY-MM-DD HH:MM:SS precision)
+    prefixed onto the slug, so html/*.html and pdf/*.pdf sort
+    chronologically instead of alphabetically by title.
+
+    Unlike fabtcg-stories-archive/fabrec-articles-archive (which get every
+    article's date from one WP REST API listing call, letting same-date
+    ties be resolved globally before anything is downloaded), rathetimes
+    has no such listing metadata — dates are only discoverable by fetching
+    each article's own page, one at a time. So instead of a date + seq-on-
+    collision scheme requiring batch coordination, always include the full
+    HH:MM:SS time — trivial to compute per-article in isolation, and the
+    site's real timestamps are unique to the second for 543/555 articles
+    anyway (the slug suffix, already unique, breaks the rare tie)."""
+    match = PUBLISHED_TIME_RE.search(html)
+    if not match:
+        return slug
+    date, time_str = match.group(1).split(" ")
+    return f"{date}-{time_str.replace(':', '')}-{slug}"
+
+
+def existing_html_stems() -> dict[str, Path]:
+    """slug -> existing html/*.html Path, for the "already saved" skip
+    check — since the filename is no longer just f"{slug}.html"."""
+    mapping: dict[str, Path] = {}
+    for f in HTML_DIR.glob("*.html"):
+        m = STEM_DATE_PREFIX_RE.match(f.stem)
+        slug = f.stem[m.end():] if m else f.stem
+        mapping[slug] = f
+    return mapping
+
+
 def discover_article_slugs(limit: int | None = None) -> list[str]:
     """Newest-first. With `limit` set, stops as soon as that many slugs are
     found instead of crawling every page — useful for a quick test run."""
@@ -145,10 +184,10 @@ def discover_article_slugs(limit: int | None = None) -> list[str]:
 
 def download_html(slugs: list[str], override: bool = False) -> None:
     HTML_DIR.mkdir(parents=True, exist_ok=True)
+    existing = existing_html_stems()
     print(f"\nDownloading {len(slugs)} articles to {HTML_DIR}/")
     for i, slug in enumerate(slugs, 1):
-        dest = HTML_DIR / f"{slug}.html"
-        if dest.exists() and not override:
+        if slug in existing and not override:
             print(f"  [{i}/{len(slugs)}] {slug} (already saved)")
             continue
         url = f"{BASE_URL}/articles/{slug}"
@@ -157,6 +196,7 @@ def download_html(slugs: list[str], override: bool = False) -> None:
         except urllib.error.URLError as exc:
             print(f"  [{i}/{len(slugs)}] {slug} FAILED: {exc}")
             continue
+        dest = HTML_DIR / f"{stem_for(slug, html)}.html"
         dest.write_text(html, encoding="utf-8")
         print(f"  [{i}/{len(slugs)}] {slug}")
         time.sleep(REQUEST_DELAY_SECONDS)

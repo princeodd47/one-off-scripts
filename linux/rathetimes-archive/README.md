@@ -9,12 +9,32 @@ each to PDF for offline/long-term storage.
 1. Crawls the paginated article listing (`?page=N`) to discover every
    `/articles/<slug>` URL — no API or sitemap exists, so this is the only
    enumeration path. Stops automatically at the first empty page.
-2. Downloads each article's HTML as-is to `html/<slug>.html`.
-3. Renders each to `pdf/<slug>.pdf` via headless Chrome, then recompresses
-   with Ghostscript. Chrome's `--print-to-pdf` embeds photos as raw
-   full-resolution bitmaps, so an uncompressed run produces ~20-25 MB PDFs
-   *per article*; the Ghostscript `/ebook` pass brings that down to a few
-   hundred KB with no visible quality loss.
+2. Downloads each article's HTML as-is to
+   `html/<date>-<time>-<slug>.html` (see "File naming" below).
+3. Renders each to `pdf/<date>-<time>-<slug>.pdf` via headless Chrome, then
+   recompresses with Ghostscript. Chrome's `--print-to-pdf` embeds photos
+   as raw full-resolution bitmaps, so an uncompressed run produces ~20-25 MB
+   PDFs *per article*; the Ghostscript `/ebook` pass brings that down to a
+   few hundred KB with no visible quality loss.
+
+### File naming
+
+Files are named `<date>-<HHMMSS>-<slug>` (e.g.
+`2026-09-21-143937-farewell-and-thank-you-from-the-rathe-times.pdf`), using
+the `article:published_time` Open Graph meta tag present in every article's
+`<head>` (real full-precision timestamps, unique to the second for
+543/555 articles), so `html/`/`pdf/` sort chronologically instead of
+alphabetically by title.
+
+Unlike `../fabtcg-stories-archive`/`../fabrec-articles-archive` (which get
+every article's date from one WP REST API listing call, so same-date ties
+can be resolved globally with a sequence number before anything is
+downloaded), rathetimes has no such listing metadata — dates are only
+discoverable by fetching each article's own page, one at a time. So instead
+of a date + seq-on-collision scheme, the time-of-day is always included; it
+requires no cross-article coordination, and the ~12 articles sharing an
+exact timestamp (all from the site's original 2021-03-11 launch batch) just
+fall back to alphabetical-by-slug, the same as any other filename tie.
 
 The site's header contains a mobile-nav drawer (Alpine.js, `position:
 fixed`) that only gets hidden once client-side JS finishes running.
