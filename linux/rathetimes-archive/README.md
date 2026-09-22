@@ -46,6 +46,13 @@ injected print CSS — but only in the temp copy used for PDF rendering; the
 saved `html/*.html` files are untouched, byte-for-byte copies of what the
 server returned.
 
+Article images are also full-bleed/full-width by the site's own screen
+CSS, with nothing constraining print size, so many rendered at ~5.5x7.7in
+on an 8.5x11in page — near-full-page, pushing pages down to a single
+sentence of text. The same injected print CSS caps display size
+(`max-height:4in`) instead, which cut total PDF size roughly in half
+(513MB → 218MB across all 555 articles).
+
 Several articles embed a YouTube video. Chrome's `--print-to-pdf` loads the
 page via `file://`, and YouTube's player refuses to embed for an
 unrecognized origin there ("Video player configuration error, Error 153")

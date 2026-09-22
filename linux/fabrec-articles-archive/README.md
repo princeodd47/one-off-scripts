@@ -26,6 +26,11 @@ approach.
    uncompressed run produces large PDFs; this brings each down to a few
    hundred KB with no visible quality loss on screen.
 
+Article images are also full-bleed/full-width by the site's own screen
+CSS, with nothing constraining print size, so some rendered at near-full-
+page, pushing pages down to a single sentence of text. `PRINT_CSS_OVERRIDE`
+caps display size (`max-height:4in`) for print instead.
+
 ### File naming
 
 Files are named `<date>-<slug>` (e.g.

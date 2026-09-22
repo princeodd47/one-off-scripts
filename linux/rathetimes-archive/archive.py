@@ -45,9 +45,16 @@ ARTICLE_HREF_RE = re.compile(r'href="/articles/([a-z0-9\-]+)"')
 # renders as a full-page overlay on every printed page. It also has a large
 # tiled SVG background pattern that Chrome rasterizes at full resolution on
 # every page. Neither is article content, so strip both before printing.
+#
+# Article images are also full-bleed/full-width by the site's own screen
+# CSS, with nothing constraining print size, so many render at ~5.5x7.7in
+# on an 8.5x11in page — near-full-page, pushing pages down to a single
+# sentence of text. Cap display size for print instead.
 PRINT_CSS_OVERRIDE = (
     "<style>header{display:none!important}"
-    ".bg-grid-light,.bg-grid-dark{background-image:none!important}</style></head>"
+    ".bg-grid-light,.bg-grid-dark{background-image:none!important}"
+    "img{max-width:100%!important;max-height:4in!important;width:auto!important;"
+    "height:auto!important;object-fit:contain!important}</style></head>"
 )
 
 

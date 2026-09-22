@@ -29,6 +29,14 @@ adapted for this site and tuned for print rather than screen archival.
    (tens of MB per article), so this is still a large size reduction, just
    tuned for crisp paper output rather than the smallest possible file.
 
+Article art is full-bleed/full-width by the site's own screen CSS, with
+nothing constraining print size, so many images rendered at near-full-page
+— a single sentence of body text sharing a page with an image several
+times its needed size. `PRINT_OVERRIDE` caps display size
+(`max-height:4in`) for print instead, trading some of the "big hero art"
+look this archive is otherwise tuned for in exchange for a shorter, more
+printable binder.
+
 A handful of stories embed a Vimeo video (hero reveal trailers). Chrome's
 `--print-to-pdf` doesn't render cross-origin iframes, which left blank
 space where the player would be. `replace_vimeo_embeds()` swaps each Vimeo

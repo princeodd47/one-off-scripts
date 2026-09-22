@@ -44,8 +44,15 @@ PDF_DIR = SCRIPT_DIR / "pdf"
 # Strip the site nav and footer, plus the tags sidebar (not article content),
 # via injected CSS. Applied to a temp copy only — the saved archival HTML in
 # html/*.html is left untouched.
+#
+# Article images are also full-bleed/full-width by the site's own screen
+# CSS, with nothing constraining print size, so many render at near-full-
+# page, pushing pages down to a single sentence of text. Cap display size
+# for print instead.
 PRINT_CSS_OVERRIDE = (
-    "<style>nav.navbar,.footer,.blog-sidebar{display:none!important}</style></head>"
+    "<style>nav.navbar,.footer,.blog-sidebar{display:none!important}"
+    "img{max-width:100%!important;max-height:4in!important;width:auto!important;"
+    "height:auto!important;object-fit:contain!important}</style></head>"
 )
 
 
