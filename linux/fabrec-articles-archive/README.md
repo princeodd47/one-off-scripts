@@ -43,6 +43,16 @@ Order is whatever the API returns (newest-first) for the discovery/log
 output above, but the saved filenames are chronological as described.
 Each article is its own PDF rather than one combined file.
 
+A few articles embed a YouTube video. Chrome's `--print-to-pdf` loads the
+page via `file://`, and YouTube's player refuses to embed for an
+unrecognized origin there ("Video player configuration error, Error 153")
+instead of just failing to render — worse than blank space.
+`replace_youtube_embeds()` swaps each one for its thumbnail (via YouTube's
+oEmbed API) plus a caption pointing back to the video, applied to the temp
+copy only, same as the nav/footer stripping above. (One article has a
+native, self-hosted `<video>` instead — those aren't cross-origin iframes,
+so Chrome renders them fine and no fix is needed.)
+
 Re-running the script is safe: both the download and convert steps skip
 files that already exist, so an interrupted run just resumes.
 

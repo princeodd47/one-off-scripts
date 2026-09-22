@@ -26,6 +26,14 @@ injected print CSS — but only in the temp copy used for PDF rendering; the
 saved `html/*.html` files are untouched, byte-for-byte copies of what the
 server returned.
 
+Several articles embed a YouTube video. Chrome's `--print-to-pdf` loads the
+page via `file://`, and YouTube's player refuses to embed for an
+unrecognized origin there ("Video player configuration error, Error 153")
+instead of just failing to render — worse than blank space.
+`replace_youtube_embeds()` swaps each one for its thumbnail (via YouTube's
+oEmbed API) plus a caption pointing back to the video, applied to the temp
+copy only, same as the header/background stripping above.
+
 Re-running the script is safe: both the download and convert steps skip
 files that already exist, so an interrupted run just resumes.
 

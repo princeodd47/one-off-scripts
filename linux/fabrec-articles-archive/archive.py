@@ -20,6 +20,7 @@ Python packages needed.
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -52,6 +53,53 @@ def fetch(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=30) as resp:
         return resp.read()
+
+
+# A few articles embed a YouTube video. Chrome's --print-to-pdf loads the
+# page via file://, and YouTube's player refuses to embed for an
+# unrecognized origin there ("Video player configuration error, Error
+# 153") instead of just failing to render — worse than blank space. Swap
+# each embed for its thumbnail (via YouTube's oEmbed API) plus a caption
+# pointing back to the video.
+YOUTUBE_IFRAME_RE = re.compile(
+    r'<iframe[^>]*\bsrc="(?:https?:)?//(?:www\.)?youtube(?:-nocookie)?\.com/embed/([\w-]+)[^"]*"[^>]*></iframe>'
+)
+
+
+def _escape_html(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def fetch_youtube_thumbnail(video_id: str) -> tuple[str, str] | None:
+    """(thumbnail_url, title) for a YouTube video via its oEmbed API, or
+    None on any failure (caller then just leaves the iframe as-is)."""
+    url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+    try:
+        data = json.loads(fetch(url))
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
+        return None
+    thumbnail_url = data.get("thumbnail_url")
+    if not thumbnail_url:
+        return None
+    return thumbnail_url, data.get("title", "")
+
+
+def replace_youtube_embeds(html: str) -> str:
+    def _sub(match: re.Match) -> str:
+        video_id = match.group(1)
+        result = fetch_youtube_thumbnail(video_id)
+        if not result:
+            return match.group(0)
+        thumbnail_url, title = result
+        watch_url = f"https://www.youtube.com/watch?v={video_id}"
+        caption = f"▶ {title} — watch at youtube.com/watch?v={video_id}" if title else f"▶ watch at {watch_url}"
+        return (
+            f'<a href="{watch_url}"><img src="{_escape_html(thumbnail_url)}" alt="{_escape_html(title)}" '
+            'style="max-width:100%;height:auto;display:block"></a>'
+            f'<div style="font-size:13px;color:#555;margin-top:4px">{_escape_html(caption)}</div>'
+        )
+
+    return YOUTUBE_IFRAME_RE.sub(_sub, html)
 
 
 def assign_stems(articles: list[dict]) -> dict[str, str]:
@@ -153,6 +201,7 @@ def render_pdf(chrome_bin: str, html_file: Path, pdf_file: Path) -> tuple[bool, 
     """Render html_file to pdf_file via headless Chrome, with print CSS
     overrides applied to a temp copy so the saved archival HTML is untouched."""
     html = html_file.read_text(encoding="utf-8", errors="replace")
+    html = replace_youtube_embeds(html)
     stripped_html = html.replace("</head>", PRINT_CSS_OVERRIDE, 1)
 
     with tempfile.NamedTemporaryFile(
